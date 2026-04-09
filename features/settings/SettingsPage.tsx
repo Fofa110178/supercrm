@@ -13,7 +13,6 @@ import { BusinessUnitsSection } from './components/BusinessUnitsSection';
 import { DataStorageSettings } from './components/DataStorageSettings';
 import { ProductsCatalogManager } from './components/ProductsCatalogManager';
 import { AICenterSettings } from './AICenterSettings';
-
 import { UsersPage } from './UsersPage';
 import { useAuth } from '@/context/AuthContext';
 import { Settings as SettingsIcon, Users, Database, Sparkles, Plug, Package, Building2 } from 'lucide-react';
@@ -30,10 +29,9 @@ interface GeneralSettingsProps {
 const GeneralSettings: React.FC<GeneralSettingsProps> = ({ hash, isAdmin }) => {
   const controller = useSettingsController();
 
-  // Scroll to hash element (e.g., #ai-config)
   useEffect(() => {
     if (hash) {
-      const elementId = hash.slice(1); // Remove #
+      const elementId = hash.slice(1);
       setTimeout(() => {
         const element = document.getElementById(elementId);
         if (element) {
@@ -43,10 +41,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ hash, isAdmin }) => {
     }
   }, [hash]);
 
-
   return (
     <div className="pb-10">
-      {/* General Settings */}
       <div className="mb-12">
         <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-6">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">Página Inicial</h3>
@@ -81,7 +77,6 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ hash, isAdmin }) => {
             onAddTag={controller.handleAddTag}
             onRemoveTag={controller.removeTag}
           />
-
           <CustomFieldsManager
             customFieldDefinitions={controller.customFieldDefinitions}
             newFieldLabel={controller.newFieldLabel}
@@ -98,18 +93,15 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ hash, isAdmin }) => {
           />
         </>
       )}
-
     </div>
   );
 };
 
-const ProductsSettings: React.FC = () => {
-  return (
-    <div className="pb-10">
-      <ProductsCatalogManager />
-    </div>
-  );
-};
+const ProductsSettings: React.FC = () => (
+  <div className="pb-10">
+    <ProductsCatalogManager />
+  </div>
+);
 
 const IntegrationsSettings: React.FC = () => {
   type IntegrationsSubTab = 'channels' | 'webhooks' | 'api' | 'mcp';
@@ -117,12 +109,10 @@ const IntegrationsSettings: React.FC = () => {
 
   useEffect(() => {
     const syncFromHash = () => {
-    const h = typeof window !== 'undefined' ? (window.location.hash || '').replace('#', '') : '';
-    if (h === 'channels' || h === 'webhooks' || h === 'api' || h === 'mcp') setSubTab(h as IntegrationsSubTab);
+      const h = typeof window !== 'undefined' ? (window.location.hash || '').replace('#', '') : '';
+      if (h === 'channels' || h === 'webhooks' || h === 'api' || h === 'mcp') setSubTab(h as IntegrationsSubTab);
     };
-
     syncFromHash();
-
     if (typeof window !== 'undefined') {
       window.addEventListener('hashchange', syncFromHash);
       return () => window.removeEventListener('hashchange', syncFromHash);
@@ -146,22 +136,18 @@ const IntegrationsSettings: React.FC = () => {
           { id: 'webhooks' as const, label: 'Webhooks' },
           { id: 'api' as const, label: 'API' },
           { id: 'mcp' as const, label: 'MCP' },
-        ] as const).map((t) => {
-          const active = subTab === t.id;
-          return (
-            <Button
-              key={t.id}
-              type="button"
-              variant={active ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSubTabAndHash(t.id)}
-            >
-              {t.label}
-            </Button>
-          );
-        })}
+        ] as const).map((t) => (
+          <Button
+            key={t.id}
+            type="button"
+            variant={subTab === t.id ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSubTabAndHash(t.id)}
+          >
+            {t.label}
+          </Button>
+        ))}
       </div>
-
       {subTab === 'channels' && <ChannelsSection />}
       {subTab === 'api' && <ApiKeysSection />}
       {subTab === 'webhooks' && <WebhooksSection />}
@@ -185,10 +171,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ tab: initialTab }) => {
   const pathname = usePathname();
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab || 'general');
 
-  // Get hash from URL for scrolling
   const hash = typeof window !== 'undefined' ? window.location.hash : '';
 
-  // Determine tab from pathname if available
   useEffect(() => {
     if (pathname?.includes('/settings/ai')) {
       setActiveTab('ai');
@@ -242,7 +226,6 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ tab: initialTab }) => {
 
   return (
     <div className="max-w-5xl mx-auto">
-      {/* Tabs minimalistas */}
       <div className="flex items-center gap-1 mb-8 border-b border-slate-200 dark:border-white/10">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -264,12 +247,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ tab: initialTab }) => {
           );
         })}
       </div>
-
-      {/* Content */}
       {renderContent()}
     </div>
   );
 };
 
 export default SettingsPage;
-
