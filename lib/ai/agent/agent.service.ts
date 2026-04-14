@@ -67,7 +67,6 @@ export interface OrgAIConfig {
   templateId: string | null;
   takeoverEnabled: boolean;
   takeoverMinutes: number;
-  allKeys: Record<AIProvider, string | null>;
   /** Org-level base system prompt (rules, tone, identity). DB: ai_base_system_prompt. Null → use built-in default. */
   baseSystemPrompt: string | null;
   /** Org timezone. DB: timezone. Default 'America/Sao_Paulo'. */
@@ -84,7 +83,7 @@ export async function getOrgAIConfig(
   const { data: orgSettings, error } = await supabase
     .from('organization_settings')
     .select(
-      'ai_enabled, ai_provider, ai_model, ai_google_key, ai_openai_key, ai_anthropic_key, ai_hitl_threshold, ai_hitl_min_confidence, ai_hitl_expiration_hours, ai_config_mode, ai_learned_patterns, ai_template_id, ai_takeover_enabled, ai_takeover_minutes, ai_base_system_prompt, timezone'
+      'ai_enabled, ai_provider, ai_model, ai_google_key, ai_hitl_threshold, ai_hitl_min_confidence, ai_hitl_expiration_hours, ai_config_mode, ai_learned_patterns, ai_template_id, ai_takeover_enabled, ai_takeover_minutes, ai_base_system_prompt, timezone'
     )
     .eq('organization_id', organizationId)
     .maybeSingle();
@@ -101,21 +100,7 @@ export async function getOrgAIConfig(
 
   const provider = (orgSettings.ai_provider || AI_DEFAULT_PROVIDER) as AIProvider;
 
-  // Selecionar a chave correta baseado no provider
-  const getApiKey = () => {
-    switch (provider) {
-      case 'google':
-        return orgSettings.ai_google_key || '';
-      case 'openai':
-        return orgSettings.ai_openai_key || '';
-      case 'anthropic':
-        return orgSettings.ai_anthropic_key || '';
-      default:
-        return '';
-    }
-  };
-
-  const apiKey = getApiKey();
+  const apiKey = orgSettings.ai_google_key || '';
 
   if (!apiKey) {
     console.warn('[AIAgent] No API key configured for provider:', provider);
@@ -146,11 +131,6 @@ export async function getOrgAIConfig(
     templateId: orgSettings.ai_template_id || null,
     takeoverEnabled: orgSettings.ai_takeover_enabled === true,
     takeoverMinutes: orgSettings.ai_takeover_minutes ?? 15,
-    allKeys: {
-      google: orgSettings.ai_google_key || null,
-      openai: orgSettings.ai_openai_key || null,
-      anthropic: orgSettings.ai_anthropic_key || null,
-    },
     baseSystemPrompt: orgSettings.ai_base_system_prompt || null,
     timezone: orgSettings.timezone || 'America/Sao_Paulo',
   };
@@ -426,41 +406,38 @@ export async function processIncomingMessage(
 
   // 6. Verificar limite de mensagens
   if (context.stats.ai_messages_count >= config.settings.max_messages_per_conversation) {
-    return {
-      success: true,
-      decision: await handleHandoff(supabase, conversationId, organizationId, context, 'Limite de mensagens atingido', incomingMessage),
-    };
+    const handoffDecision = await handleHandoff(supabase, conversationId, organizationId, context, 'Limite de mensagens atingido', incomingMessage);
+    await logAIInteraction({ supabase, organizationId, conversationId, messageId, stageId: deal.stage_id, context, decision: handoffDecision });
+    return { success: true, decision: handoffDecision };
   }
 
   // 7. Verificar handoff keywords
   const handoffKeyword = checkHandoffKeywords(incomingMessage, config.settings.handoff_keywords);
   if (handoffKeyword) {
-    return {
-      success: true,
-      decision: await handleHandoff(
-        supabase,
-        conversationId,
-        organizationId,
-        context,
-        `Keyword de handoff detectada: "${handoffKeyword}"`,
-        incomingMessage,
-      ),
-    };
+    const handoffDecision = await handleHandoff(
+      supabase,
+      conversationId,
+      organizationId,
+      context,
+      `Keyword de handoff detectada: "${handoffKeyword}"`,
+      incomingMessage,
+    );
+    await logAIInteraction({ supabase, organizationId, conversationId, messageId, stageId: deal.stage_id, context, decision: handoffDecision });
+    return { success: true, decision: handoffDecision };
   }
 
   // 7.5. Verificar notify_team — handoff automático por configuração de estágio
   if (config.notify_team) {
-    return {
-      success: true,
-      decision: await handleHandoff(
-        supabase,
-        conversationId,
-        organizationId,
-        context,
-        'Estágio configurado para notificar equipe (notify_team)',
-        incomingMessage,
-      ),
-    };
+    const handoffDecision = await handleHandoff(
+      supabase,
+      conversationId,
+      organizationId,
+      context,
+      'Estágio configurado para notificar equipe (notify_team)',
+      incomingMessage,
+    );
+    await logAIInteraction({ supabase, organizationId, conversationId, messageId, stageId: deal.stage_id, context, decision: handoffDecision });
+    return { success: true, decision: handoffDecision };
   }
 
   // 8. Verificar horário comercial
@@ -472,6 +449,11 @@ export async function processIncomingMessage(
         reason: 'Fora do horário comercial',
       },
     };
+  }
+
+  // 8.5. Aplicar delay de resposta (simula tempo humano de digitação)
+  if (config.settings.response_delay_seconds > 0) {
+    await new Promise<void>((r) => setTimeout(r, config.settings.response_delay_seconds * 1000));
   }
 
   // 9. Gerar resposta usando configuração de AI do banco
@@ -622,7 +604,6 @@ Responda de forma natural, seguindo as instruções do sistema.
       provider: aiConfig.provider,
       apiKey: aiConfig.apiKey,
       model: modelId,
-      allKeys: aiConfig.allKeys,
     });
 
     const result = await generateWithFailover({
@@ -980,7 +961,7 @@ async function logAIInteraction(params: {
       conversation_id: conversationId,
       message_id: messageId,
       stage_id: stageId,
-      context_snapshot: context,
+      context_snapshot: context ?? {},
       ai_response: decision.response || '',
       tokens_used: decision.tokens_used,
       model_used: decision.model_used,
